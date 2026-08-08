@@ -4,18 +4,13 @@ import { sendPushNotification } from "../services/fcm.service.js";
 import { env } from "../config/env.js";
 import { LEAD_STATUS } from "../utils/constants.js";
 
-/**
- * Reminder rules (per spec):
- * - Start reminding 30 minutes before nextFollowUpDate.
- * - Keep reminding "at regular intervals" until the scheduled time.
- * - A lead with status VISIT_PLANNED reuses the same nextFollowUpDate as its
- *   visit time, so this single job covers both follow-up and visit reminders.
- *
- * Implementation: every `cronIntervalMinutes` (default 5), find leads whose
- * nextFollowUpDate falls within the next `leadMinutes` (default 30) window
- * and that haven't been reminded in the last `cronIntervalMinutes`, then
- * push a notification to the assigned user's registered devices.
- */
+// Statuses that are "closed" — no more reminders should ever fire for them.
+const EXCLUDED_STATUSES = [
+  LEAD_STATUS.BROKER,
+  LEAD_STATUS.CONVERTED,
+  LEAD_STATUS.DROPPED,
+];
+
 const runReminderSweep = async () => {
   const now = new Date();
   const windowEnd = new Date(
@@ -26,20 +21,32 @@ const runReminderSweep = async () => {
   );
 
   const dueLeads = await Lead.find({
-    nextFollowUpDate: { $gte: now, $lte: windowEnd },
-    status: { $nin: [LEAD_STATUS.CONVERTED, LEAD_STATUS.DROPPED] },
+    status: { $nin: EXCLUDED_STATUSES },
     $or: [
       { lastReminderSentAt: null },
       { lastReminderSentAt: { $lte: debounceThreshold } },
+    ],
+    $and: [
+      {
+        $or: [
+          {
+            status: LEAD_STATUS.VISIT_PLANNED,
+            visitDate: { $gte: now, $lte: windowEnd },
+          },
+          {
+            status: { $ne: LEAD_STATUS.VISIT_PLANNED },
+            nextFollowUpDate: { $gte: now, $lte: windowEnd },
+          },
+        ],
+      },
     ],
   }).populate("assignedTo", "fcmTokens name");
 
   for (const lead of dueLeads) {
     const isVisit = lead.status === LEAD_STATUS.VISIT_PLANNED;
+    const dueDate = isVisit ? lead.visitDate : lead.nextFollowUpDate;
     const title = isVisit ? "Upcoming site visit" : "Upcoming follow-up";
-    const body = `${lead.name} - ${isVisit ? "visit" : "follow-up"} scheduled at ${new Date(
-      lead.nextFollowUpDate,
-    ).toLocaleString()}`;
+    const body = `${lead.name} - ${isVisit ? "visit" : "follow-up"} scheduled at ${new Date(dueDate).toLocaleString()}`;
 
     try {
       await sendPushNotification({
@@ -81,5 +88,4 @@ export const startReminderJob = () => {
   );
 };
 
-// Exported for testing / manual trigger via a debug route if ever needed.
 export { runReminderSweep };

@@ -14,7 +14,7 @@ export const registerOrganizationValidator = [
     .trim()
     .isEmail()
     .withMessage("A valid email is required")
-    .normalizeEmail(),
+    .normalizeEmail({ gmail_remove_dots: false }),
   body("mobileNumber")
     .trim()
     .matches(/^[0-9]{10}$/)
@@ -39,7 +39,7 @@ export const verifyOtpValidator = [
     .trim()
     .isEmail()
     .withMessage("A valid email is required")
-    .normalizeEmail(),
+    .normalizeEmail({ gmail_remove_dots: false }),
   body("otp").trim().notEmpty().withMessage("OTP is required"),
 ];
 
@@ -48,7 +48,7 @@ export const resendOtpValidator = [
     .trim()
     .isEmail()
     .withMessage("A valid email is required")
-    .normalizeEmail(),
+    .normalizeEmail({ gmail_remove_dots: false }),
 ];
 
 export const loginValidator = [
@@ -64,7 +64,7 @@ export const forgotPasswordValidator = [
     .trim()
     .isEmail()
     .withMessage("A valid email is required")
-    .normalizeEmail(),
+    .normalizeEmail({ gmail_remove_dots: false }),
 ];
 
 export const resetPasswordValidator = [
@@ -72,7 +72,7 @@ export const resetPasswordValidator = [
     .trim()
     .isEmail()
     .withMessage("A valid email is required")
-    .normalizeEmail(),
+    .normalizeEmail({ gmail_remove_dots: false }),
   body("otp").trim().notEmpty().withMessage("OTP is required"),
   body("newPassword")
     .isLength({ min: 6 })
